@@ -1,0 +1,100 @@
+services:
+  mariadb:
+    image: mariadb:latest
+    container_name: "${CONTAINER_PREFIX:-app_}mariadb"
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: laravel
+      MYSQL_USER: laravel
+      MYSQL_PASSWORD: secret
+    ports:
+      - "3306:3306"
+    volumes:
+      - mariadb_data:/var/lib/mysql
+
+  redis:
+    image: redis:alpine
+    container_name: "${CONTAINER_PREFIX:-app_}redis"
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+
+  php-fpm:
+    container_name: "${CONTAINER_PREFIX:-app_}php-fpm"
+    ports:
+      - "9000:9000"
+    volumes:
+      - ./:/var/www/html
+      - ./logs/php:/var/log/php
+    environment:
+      - APP_ENV=local
+      - APP_DEBUG=true
+    depends_on:
+      - mariadb
+      - redis
+    build:
+      context: .
+      dockerfile: ./docker/php/Dockerfile
+      args:
+        BASE_IMAGE: php:8.2-fpm
+
+  queue-worker:
+    container_name: "${CONTAINER_PREFIX:-app_}queue-worker"
+    working_dir: /var/www/html
+    volumes:
+      - ./:/var/www/html
+      - ./logs/queue:/var/log/queue
+    command: php artisan queue:work --sleep=3 --tries=3
+    depends_on:
+      - redis
+    build:
+      context: .
+      dockerfile: ./docker/php/Dockerfile
+      args:
+        BASE_IMAGE: php:8.2-cli
+
+  horizon:
+    container_name: "${CONTAINER_PREFIX:-app_}horizon"
+    working_dir: /var/www/html
+    volumes:
+      - ./:/var/www/html
+      - ./logs/horizon:/var/log/horizon
+    command: php artisan horizon
+    build:
+      context: .
+      dockerfile: ./docker/php/Dockerfile
+      args:
+        BASE_IMAGE: php:8.2-cli
+    depends_on:
+      - redis      
+
+  web:
+    image: nginx:latest
+    container_name: "${CONTAINER_PREFIX:-app_}nginx"
+    ports:
+      - "8080:80"
+    volumes:
+      - ./:/var/www/html
+      - ./docker/nginx/nginx.conf:/etc/nginx/nginx.conf
+    depends_on:
+      - php-fpm
+
+  mailer:
+    image: axllent/mailpit
+    container_name: "${CONTAINER_PREFIX:-app_}mailer"
+    restart: unless-stopped
+    volumes:
+      - ./data:/data
+    ports:
+      - 8025:8025
+      - 1025:1025
+    environment:
+      MP_MAX_MESSAGES: 5000
+      MP_DATABASE: /data/mailpit.db
+      MP_SMTP_AUTH_ACCEPT_ANY: 1
+      MP_SMTP_AUTH_ALLOW_INSECURE: 1
+
+volumes:
+  mariadb_data:
+  redis_data:
