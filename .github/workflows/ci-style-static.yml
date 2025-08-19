@@ -1,0 +1,93 @@
+name: Style & Static Analysis
+
+on:
+  pull_request:
+    branches: [ develop, main ]
+  workflow_dispatch:
+
+jobs:
+  style_static:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      pull-requests: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.1'
+          coverage: none
+          tools: composer:v2
+
+      - name: Cache Composer
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.composer/cache
+            vendor
+          key: ${{ runner.os }}-php81-composer-${{ hashFiles('**/composer.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-php81-composer-
+
+      - name: Install dependencies
+        run: |
+          composer install --no-interaction --prefer-dist --no-progress
+
+      # ------- Detect changed files in the PR -------
+      - name: Detectar archivos PHP modificados
+        id: changed
+        run: |
+          # Base ref of the PR (e.g., develop/main)
+          echo "BASE_REF=${{ github.base_ref }}" >> $GITHUB_OUTPUT
+          # List of changed files vs base
+          git fetch origin ${{ github.base_ref }} --depth=1
+          git diff --name-only origin/${{ github.base_ref }}...HEAD > all_changed.txt
+          # PHP files only
+          grep -E '\.php$' all_changed.txt > changed_php.txt || true
+          # Config files that force full analysis
+          grep -E '(^|/)(phpstan(\.neon|\.neon\.dist)?|composer\.json|composer\.lock)$' all_changed.txt && echo "force_full=1" >> $GITHUB_OUTPUT || echo "force_full=0" >> $GITHUB_OUTPUT
+          # For visibility
+          echo "Changed PHP files:"
+          cat changed_php.txt || true
+
+      # ------- Run Pint on changed PHP files -------
+      - name: Ejecutar Laravel Pint a los archivos PHP modificados
+        run: |
+          if [ -s changed_php.txt ]; then
+            # Use --test to fail if formatting is off (no auto-fix in CI)
+            xargs -a changed_php.txt vendor/bin/pint --test
+          else
+            echo "No PHP files changed; skipping Pint."
+          fi
+
+      # ------- Run PHPStan (smart: full or changed) -------
+      - name: Ejecutar PHPStan
+        env:
+          FORCE_FULL: ${{ steps.changed.outputs.force_full }}
+        run: |
+          set -e
+          # Default args: GitHub-friendly output; adjust level/config as needed
+          PHPSTAN_ARGS="--error-format=github"
+
+          if [ "$FORCE_FULL" = "1" ]; then
+            echo "Config/composer changed → running FULL PHPStan analysis."
+            vendor/bin/phpstan analyse $PHPSTAN_ARGS
+            exit $?
+          fi
+
+          if [ -s changed_php.txt ]; then
+            echo "Running PHPStan on changed PHP files."
+            # Some shells limit arg length; feed via xargs safely
+            xargs -a changed_php.txt vendor/bin/phpstan analyse $PHPSTAN_ARGS
+          else
+            echo "No PHP files changed; running a minimal bootstrap check to ensure config is valid."
+            # Tiny fallback (fast) – analyse a common directory. Adjust if needed.
+            vendor/bin/phpstan analyse app $PHPSTAN_ARGS || true
+          fi
