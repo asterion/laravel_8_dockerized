@@ -1,4 +1,4 @@
-name: Style & Static Analysis
+name: Estilo y Analisis estatico de archivos PHP modificados
 
 on:
   pull_request:
