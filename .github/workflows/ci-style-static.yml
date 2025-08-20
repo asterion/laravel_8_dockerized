@@ -1,4 +1,4 @@
-name: Estilo y Analisis estatico de archivos PHP modificados
+name: Pruebas de cumplimientos de reglas minimas de calidad de software
 
 on:
   pull_request:
