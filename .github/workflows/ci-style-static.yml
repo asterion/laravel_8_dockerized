@@ -79,3 +79,17 @@ jobs:
           else
             echo "No PHP files changed; skipping PHPStan."
           fi
+
+      - name: Configurar SQLite in-memory
+        run: |
+          cp .env.example .env
+          php artisan key:generate
+        env:
+          DB_CONNECTION: sqlite
+          DB_DATABASE: ':memory:'
+
+      - name: Comprobar migraciones corren correctamente
+        run: php artisan migrate:fresh --force
+        env:
+          DB_CONNECTION: sqlite
+          DB_DATABASE: ':memory:'
