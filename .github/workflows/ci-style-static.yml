@@ -49,6 +49,17 @@ jobs:
           echo "Changed PHP files:"
           cat changed_php.txt || true
 
+      - name: Verificacion de syntax de archivos PHP modificados
+        run: |
+          if [ -s changed_php.txt ]; then
+            # -n: no php.ini, -l: lint
+            while IFS= read -r file; do
+              php -n -l "$file"
+            done < changed_php.txt
+          else
+            echo "No PHP files changed; skipping php -l."
+          fi
+
       # ------- Ejecutar Pint -------
       - name: Ejecutar Laravel Pint en archivos modificados
         run: |

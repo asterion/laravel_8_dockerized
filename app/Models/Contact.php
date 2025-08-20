@@ -27,7 +27,7 @@ class Contact extends Model
 
     public function phoneFormatted()
     {
-        return '+56 '.$this->phone;  // 👈 Pint: espaciado incorrecto
+        return '+56 '.$this->phone
     }
 
     public function unknownRelation()
