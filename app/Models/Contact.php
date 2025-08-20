@@ -27,7 +27,7 @@ class Contact extends Model
 
     public function phoneFormatted()
     {
-        return '+56 '.$this->phone
+        return '+56 '.$this->phone;
     }
 
     public function unknownRelation()
